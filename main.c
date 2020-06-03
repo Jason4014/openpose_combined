@@ -3,15 +3,20 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
+#include <netdb.h>
+#include <sys/socket.h>
 #include "json.h"
-#include <sys/socket.h> //for socket
-#include <arpa/inet.h> //inet_addr
 
 #ifdef _WIN32
 #include <Windows.h>
 #else
 #include <unistd.h>
 #endif
+
+#define MAX 80
+#define PORT 2000
+#define SA struct sockaddr
 
 //dirty hacks for higher than implementation
 double coor_x[100][18]={[0 ... 99][0 ... 17] = 16384}, coor_y[100][18]={[0 ... 99][0 ... 17] = 16384};
@@ -32,23 +37,14 @@ int lefthand[100]={[0 ... 99] = 0},righthand[100]={[0 ... 99] = 0}, hand_int[100
 //double coor_x_old[100][4]={0}, coor_y_old[100][4]={0};
 int num = -1;
 int num_old = 0;
+
 char defaultfilename[16] = "_keypoints.json";
-char prependfilename[35] = "/home/e516/openpose_combined/json/";
+char prependfilename[44] = "/home/ele/20200409/openpose_combined/json/";
 char filenamestring[13] = "000000000000";
-char filename[62] = "/home/e516/openpose_combined/json/000000000000_keypoints.json";
+char filename[71] = "/home/ele/20200409/openpose_combined/json/000000000000_keypoints.json";
 long long int file_i = 0;
 time_t old_result = 0;
 time_t result;
-
-int sock;
-struct sockaddr_in server;
-char message[1000];
-char new_message[1001];
-int msg_len=0;
-unsigned char close_tag[] = "\xFF";
-
-//sleep time in milliseconds
-int wait_time = 1000;
 /*
 gcc main.c json.c -lm
  */
@@ -59,7 +55,11 @@ static void print_depth_shift(int depth)
 		//printf(" ");
         }
 }
+static void func();
 static void output();
+
+int sockfd, connfd;
+struct sockaddr_in servaddr, cli;
 char* body_parts(int x);
 static void coorx(json_value* value, int x, int y);
 static void coory(json_value* value, int x, int y);
@@ -189,28 +189,62 @@ static void coorx(json_value* value, int x, int y){
 }
 static void coory(json_value* value, int x, int y){
 	coor_y[num][y]=value->u.dbl;
-  //坐姿
-	double Rslope = ((coor_y[num][8]-coor_y[num][9])/(coor_x[num][8]-coor_x[num][9]));
-	double Lslope = ((coor_y[num][11]-coor_y[num][12])/(coor_x[num][11]-coor_x[num][12]));
+  //運算
 	int sittest = 0;
-	if((Rslope > -1 && Rslope < 1)||(Lslope > -1 && Lslope < 1))sittest=1;
-	if(fall[num]==0&&sittest==1)sit[num]=1;
-  //工作中
+	int sittest1 = 0;
+	int stationtest = 0;
+	int Rstation = 0;
+	int Lstation = 0;
+	int resttest = 0;
+  //坐姿
+  	if(coor_y[num][7]==16384 && coor_y[num][0]==16384 && coor_y[num][8]==16384 && coor_y[num][9]==16384 && coor_y[num][11]==16384 && coor_y[num][12]==16384 && coor_x[num][7]==16384 && coor_x[num][0]==16384 && coor_x[num][8]==16384 && coor_x[num][9]==16384 && coor_x[num][11]==16384 && coor_x[num][12]==16384){
+		//TODO
+	}else{
+  	double Rslope = ((coor_y[num][8]-coor_y[num][9])/(coor_x[num][8]-coor_x[num][9]));
+  	double Lslope = ((coor_y[num][11]-coor_y[num][12])/(coor_x[num][11]-coor_x[num][12]));
+  	double xaxis = pow(coor_x[num][7]-coor_x[num][0],2);
+	double yaxis = pow(coor_y[num][7]-coor_y[num][0],2);
+	double distance = pow(xaxis+yaxis,0.5);
+	if((Rslope >= -1 && Rslope <= 1)||(Lslope >= -1 && Lslope <= 1))sittest=1;
+	if(fabs(coor_x[num][7]-coor_x[num][0])<=(distance/2))sittest1 = 1;
+	if(fall[num]==0&&sittest==1&&sittest1==1)sit[num]=1;
+}
+  //站姿
+	if(coor_y[num][7]==16384 && coor_y[num][0]==16384 && coor_y[num][8]==16384 && coor_y[num][9]==16384 && coor_y[num][11]==16384 && coor_y[num][12]==16384 && coor_x[num][7]==16384 && coor_x[num][0]==16384 && coor_x[num][8]==16384 && coor_x[num][9]==16384 && coor_x[num][11]==16384 && coor_x[num][12]==16384){
+		//TODO
+	}else{
+	double xaxis1 = pow(coor_x[num][7]-coor_x[num][0],2);
+	double yaxis1 = pow(coor_y[num][7]-coor_y[num][0],2);
+	double distance1 = pow(xaxis1+yaxis1,0.5);
+	double Rslope_xaxis = pow(coor_x[num][9]-coor_x[num][8],2);
+	double Rslope_yaxis = pow(coor_y[num][9]-coor_y[num][8],2);
+	double Lslope_xaxis = pow(coor_x[num][12]-coor_x[num][11],2);
+	double Lslope_yaxis = pow(coor_y[num][12]-coor_y[num][11],2);
+	double Rslope_distance = pow(Rslope_xaxis+Rslope_yaxis,0.5);
+	double Lslope_distance = pow(Lslope_xaxis+Lslope_yaxis,0.5);
+	if(fabs(coor_x[num][7]-coor_x[num][0])<=(distance1/2))stationtest = 1;
+	if(fabs(coor_x[num][9]-coor_x[num][8])<=(Rslope_distance/2))Rstation = 1;
+	if(fabs(coor_x[num][12]-coor_x[num][11])<=(Lslope_distance/2))Lstation = 1;
+	if(fall[num]==0 && stationtest==1 && (Rstation==1 || Lstation==1 ))station[num]=1;
+	}
+  //舉半手
 	if(coor_y[num][3]==16384 && coor_y[num][2]==16384 && coor_y[num][1]==16384){
 		//TODO
-	}
-	else{
-		if(coor_y[num][1]-coor_y[num][3]>0.5 && coor_y[num][2]-coor_y[num][1]>0.5)working[num]=1;
+	}else{
+		if(fabs(coor_y[num][1]-coor_y[num][3])<=50 && coor_y[num][2]-coor_y[num][1]>=0.5)working[num]=1;
 	}
   //蹲姿
 //	printf("dbg = %d %f %f %f %f\n", squat[num],coor_y[num][7],coor_y[num][6],coor_y[num][10],coor_y[num][9]);
-	if(coor_x[num][9]==16384 && coor_x[num][8]==16384 && coor_x[num][12] && coor_x[num][11] &&coor_y[num][9]==16384 && coor_y[num][8]==16384 && coor_y[num][12]==16384 && coor_y[num][11]==16384){
-	}else{
-		if(coor_y[num][8] > coor_y[num][9]&&coor_y[num][11] > coor_y[num][12])squat[num]=1;
-	}
+//	if(coor_x[num][9]==16384 && coor_x[num][8]==16384 && coor_x[num][12] && coor_x[num][11] &&coor_y[num][9]==16384 && coor_y[num][8]==16384 && coor_y[num][12]==16384 && coor_y[num][11]==16384){
+//	}else{
+//		if(coor_y[num][8] > coor_y[num][9]&&coor_y[num][11] > coor_y[num][12])squat[num]=1;
+//	}
   //舉手
 	if(coor_y[num][1]-coor_y[num][2]>0.5)righthand[num]=1;
 	if(coor_y[num][4]-coor_y[num][5]>0.5)lefthand[num]=1;
+  //休息
+	if((coor_y[num][3]-coor_y[num][2]>=0.5 && coor_y[num][2]-coor_y[num][1]>=0.5) || (coor_y[num][6]-coor_y[num][5]>=0.5 && coor_y[num][5]-coor_y[num][4])>=0.5)resttest = 1;
+	if(working[num]==0 && righthand[num]==0 && lefthand[num]==0 && resttest==1)rest[num]=1;
   //倒下
 	if(coor_x[num][0]==16384 || coor_x[num][7]==16384 || coor_y[num][0]==16384 || coor_y[num][7]==16384){
 		//skip
@@ -224,15 +258,11 @@ static void coory(json_value* value, int x, int y){
 		//printf("==DEBUG== Human[%d], x1=%f, y1=%f, x8=%f, y8=%f",num,coor_x[num][0],coor_y[num][0],coor_x[num][1],coor_y[num][1]);
 		//printf(" x1-x8= %f, y1-y8=%f, Slope = %f\n",(coor_x[num][1]-coor_x[num][0]),(coor_y[num][1]-coor_y[num][0]), slope);
 
-		if(slope > -1 && slope < 1)fall[num]=1;
+		if(slope >= -1 && slope <= 1)fall[num]=1;
 		//if(coor_y[num][2]-coor_y[num][3]>0.5)lefthand[num]=1;
 		//printf("x: %d, coor_x[%d][%d] = %f\n",x/3,num,y,coor_y[num][y]);
 		//printf(", ycoor=%f, y=%d\n",coor_y[num][y],y),y,coor_y[num][y]);
-	}
-  //休息
-	if(working[num]==0 && righthand[num]==0 && lefthand[num]==0)rest[num]=1;
-  //站姿
-	if(fall[num]==0 && sit[num]==0 && squat[num]==0)station[num]=1;
+}
   //坐姿有問題
 	if((sit[num]==1 && righthand[num]==1) || (sit[num]==1 && lefthand[num]==1))sit_hand[num]=1;
   //坐姿工作中
@@ -240,30 +270,151 @@ static void coory(json_value* value, int x, int y){
   //坐姿休息
 	if(sit[num]==1 && rest[num]==1 )sit_rest[num]=1;
   //站姿有問題
-	if(station[num]==1 && righthand[num]==1 && lefthand[num]==1)station_hand[num]=1;
+	if((station[num]==1 && righthand[num]==1) || (station[num]==1 && lefthand[num]==1))station_hand[num]=1;
   //站姿工作中
 	if(station[num]==1 && working[num]==1)station_working[num]=1;
   //站姿休息
 	if(station[num]==1 && rest[num]==1)station_rest[num]=1;
-	if(righthand[num]||lefthand[num]||fall[num]||squat[num]||working[num]||sit[num]||station[num]||station_rest[num]||station_working[num]||station_hand[num]||sit_working[num]||sit_rest[num]||sit_hand[num]||rest[num])output();
+	if(righthand[num]||lefthand[num]||fall[num]||squat[num]||working[num]||sit[num]||station[num]||station_rest[num]||station_working[num]||station_hand[num]||sit_working[num]||sit_rest[num]||sit_hand[num]||rest[num])
+	{output();
+	//func();
+	//write(sockfd, "a", 80);
+	}
 }
 
 static void output(){
 	//fix for the 0th person is not existent, might need to look into it more
 	if(num==0)return;
-	if(num>99)return;
-	
-	//3 instead of 2 to add \0 on end trail, suppressing warning during compile
-	char num_c[3];
-	int action = 0;
-	char action_c[3];
-	num--;
-	sprintf(num_c, "%02x", (unsigned char)num);
-	num++;
-	msg_len += 1;
-	memcpy(message, num_c, msg_len);
+	//print the results or other stuffs
 	result = time(NULL);
-	if(fall[num])printf("人類 %d 倒下了！@ %s \n", num, ctime(&result));
+	/*write(3, "a", 80);
+	//write(sockfd, "a", 80);
+	if(fall[num]==1)
+	{	
+	printf("人類 %d 倒下了！@ %s \n", num, ctime(&result));
+	write(3, "r", 80);
+	}
+	if(sit[num]==1)
+	{	
+	printf("人類 %d 坐著!@ %s \n",num, ctime(&result));
+	write(3, "s", 80);
+	}
+	if(station[num]==1)
+	{	
+	printf("人類 %d 站著!@ %s \n",num, ctime(&result));
+	write(3, "t", 80);
+	}
+	*/
+	//if((i%3)==0)
+	//if ((file_i%10)==0)
+	//{
+		if (num == 1)
+			{
+				if(sit_rest[num]==1)
+				{	
+ 				  if ((file_i%40)==0)//server data show 4 data/s
+				  {
+					printf("人類 %d 坐著休息!@ %s \n", num, ctime(&result));
+					//write(3, "0101 \n", 300);
+					write(sockfd, "0101", 4);
+					//write(3, "a", 300);
+				   }
+				}
+		
+				if(sit_working[num]==1)
+				{	
+ 				  if ((file_i%40)==0)
+				  {
+					printf("人類 %d 坐著工作中！@ %s \n", num, ctime(&result));
+					write(sockfd, "0102", 4);
+				  }
+				}
+
+				if(sit_hand[num]==1)
+				{	
+ 				  if ((file_i%40)==0)
+				  {
+					printf("人類 %d 坐著有問題!@ %s \n", num, ctime(&result));
+					write(sockfd, "0103", 4);
+				 }
+				}
+
+				if(station_rest[num]==1)
+				{	
+ 				  if ((file_i%40)==0)
+				  {
+					printf("人類 %d 站著休息！@ %s \n", num, ctime(&result));
+					write(sockfd, "0104", 4);
+				  }
+				//write(3, "b", 300);
+				}
+
+				if(station_hand[num]==1)
+				{	
+				  if ((file_i%40)==0)
+				  {
+					printf("人類 %d 站著有問題！@ %s \n", num, ctime(&result));
+					write(sockfd, "0105", 4);
+				  }
+				}
+
+				if(fall[num]==1)
+				{	
+ 				  if ((file_i%40)==0)
+				  {
+					printf("人類 %d 倒下了！@ %s \n", num, ctime(&result));
+					write (sockfd, "0106", 4);
+				  }
+		
+				}
+			}
+
+	//}
+
+		/*else if (num ==2)
+			{
+				if(sit_rest[num]==1)
+				{	
+				printf("人類 %d 坐著休息!@ %s \n", num, ctime(&result));
+				write(3, "0201 \n", 300);
+				//write(3, "0200", 300);
+				}
+		
+				if(sit_working[num]==1)
+				{	
+				printf("人類 %d 坐著工作中！@ %s \n", num, ctime(&result));
+				write(3, "0202", 300);
+				}
+
+				if(sit_hand[num]==1)
+				{	
+				printf("人類 %d 坐著有問題!@ %s \n", num, ctime(&result));
+				write(3, "0203", 300);
+				}
+
+				if(station_rest[num]==1)
+				{	
+				printf("人類 %d 站著休息！@ %s \n", num, ctime(&result));
+				write(3, "0204", 300);
+				}
+
+				if(station_hand[num]==1)
+				{	
+				printf("人類 %d 站著有問題！@ %s \n", num, ctime(&result));
+				write(3, "0205", 300);
+				}
+
+				if(fall[num]==1)
+				{	
+				printf("人類 %d 倒下了！@ %s \n", num, ctime(&result));
+				write (3, "0206", 300);
+		
+				}
+			}*/
+	//}
+		
+
+/*
 //	if(righthand[num])printf("人類 %d 有問題 @ %s！\n", num, ctime(&result));
 //	if(lefthand[num])printf("人類 %d 有問題 @ %s！\n", num, ctime(&result));
 //	if(squat[num])printf("人類 %d 蹲下了!@ %s \n", num, ctime(&result));
@@ -273,26 +424,40 @@ static void output(){
 	if(sit_working[num])printf("人類 %d 坐著工作中!@ %s \n",num, ctime(&result));
 	if(sit_rest[num])printf("人類 %d 坐著休息!@ %s \n",num, ctime(&result));
 	if(station_hand[num])printf("人類 %d 站著有問題!@ %s \n",num, ctime(&result));
-	if(station_working[num])printf("人類 %d 請勿站著工作!@ %s \n",num, ctime(&result));
+//	if(station_working[num])printf("人類 %d 請勿站著工作!@ %s \n",num, ctime(&result));
 	if(station_rest[num])printf("人類 %d 站著休息!@ %s \n",num, ctime(&result));
-	//if(ststion[num])printf("人類 %d 站著!@ %s \n",num, ctime(&result));
-	//if(rest[num])printf("人類 %d 休息中!@ %s \n",num, ctime(&result));
-    if(fall[num]||squat[num])action = 1;
-	else if(sit_hand[num])action = 2;
-	else if(sit_working[num])action = 3;
-	else if(sit[num])action = 4;
-	else if(station_hand[num])action = 6;
-	else if(station_working[num])action = 7;
-	else if(station_rest[num])action = 5;
-	else action = 0;
-	
-	
-	if(action!=0){
-		sprintf(action_c, "%02x", (unsigned char)action);
-		msg_len += 1;
-		memcpy(message[msg_len], action_c[0], msg_len);
-	}
+//	if(station[num])printf("人類 %d 站著!@ %s \n",num, ctime(&result));
+//	if(rest[num])printf("人類 %d 休息中!@ %s \n",num, ctime(&result));
+*/
+}
 
+static void func()
+{
+        char buff[MAX];
+        int n;
+        for (;;) {
+        bzero(buff, sizeof(buff));
+               // printf("Enter the string : ");
+        n = 0;
+		//char buff[]= {"a"};
+               // while ((buff[n++] = getchar()) != '\n')
+	     // while (buff[n++] = "aaaaaa");
+          	//	;
+	//write(3, "x", 80);
+	//write(3, "y", 100);
+	//write(3, "z", 100);
+	//if(fall[num])  write(3, "a", 10);
+	//if(sit[num])  write(3, "b", 10);
+	//if(station[num])   write(3, "c", 10);
+                //write(sockfd, buff, sizeof(buff));
+                //bzero(buff, sizeof(buff));
+              //read(sockfd, buff, sizeof(buff));
+             // printf("From Server : %s", buff);
+         if ((strncmp(buff, "exit", 4)) == 0) {
+         printf("Client Exit...\n");
+                    break;
+             }
+       }
 }
 
 static void spit(json_value* value, int x, int y){
@@ -302,7 +467,7 @@ static void spit(json_value* value, int x, int y){
 		case 2:
 		       //confidence, used as counter
 		       //printf("x: %d, This is c: %f!\n",x/3,value->u.dbl);
-		       
+
 		       break;
 		default:break;
 	}
@@ -318,7 +483,50 @@ int main(int argc, char** argv){
 	json_char* json;
 	json_value* value;
 
-	for(file_i = 0;file_i < 999999999999; file_i++){
+       // socket create and varification 
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd == -1) {
+                printf("socket creation failed...\n");
+                exit(0);
+        }
+        else{
+                //printf("Socket successfully created..=%d \n", sockfd);
+				printf("Socket successfully created.. \n");
+		//printf("sockfd=%d \n", sockfd);
+       	}
+        bzero(&servaddr, sizeof(servaddr));
+
+	//printf("sockfd=%d \n", sockfd);
+       	
+	// assign IP, PORT
+        servaddr.sin_family = AF_INET;
+        servaddr.sin_addr.s_addr = inet_addr("192.168.100.2");
+        servaddr.sin_port = htons(PORT);
+	
+        // connect the client socket to server socket
+        if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
+                printf("connection with the server failed...\n");
+                exit(0);
+        }
+        else{
+                printf("connected to the server..\n");
+	//write(3, "b", 80);
+	//write(3, "c", 80);
+	/*for(file_i = 0;file_i < 10; file_i++){
+		write(3, "w", 80);
+	}*/
+	  printf("file_i = %d \n", file_i);
+	  for(file_i = 0;file_i < 999999999999; file_i++){
+	  //for(file_i = 0;file_i < 999999999999; file_i++){
+	  /*
+	  for(int j = 0;j< 1000; j++){
+		write(3, "z", 80);
+ 		printf("j = %d \n", j);
+		}
+	  */
+		/*for(file_i = 0;file_i < 100; file_i++){
+			write(3, "q", 80);
+		}*/
 		sprintf(filenamestring, "%012lld", file_i);
 		strcpy(filename, prependfilename);
 		strcat(filename, filenamestring);
@@ -367,44 +575,17 @@ int main(int argc, char** argv){
 			}
 
 			process_value(value, 0, 0);
-			//Create socket
-			sock = socket(AF_INET , SOCK_STREAM , 0);
-			if (sock == -1)
-			{
-				printf("Could not create socket");
-			}
-			puts("Socket created");
-			 
-			server.sin_addr.s_addr = inet_addr("127.0.0.1");
-			server.sin_family = AF_INET;
-			server.sin_port = htons( 2000 );
-		 
-			//Connect to remote server
-			if (connect(sock , (struct sockaddr *)&server , sizeof(server)) < 0)
-			{
-				perror("connect failed. Error");
-			}
-			sprintf(new_message, "%02x", (unsigned char)num);
-			msg_len += 1;
-			for(int i1 = 0; i1 < msg_len; i1++)new_message[msg_len+1] = message[msg_len];
-			msg_len += 1;
-			memcpy(new_message[msg_len], close_tag[0], msg_len);
-			//Send some data
-			if( send(sock , new_message , msg_len , 0) < 0)
-			{
-				puts("Send failed");
-			}
-			 
-			close(sock);
+
 			json_value_free(value);
 			free(file_contents);
-			
-			#ifdef _WIN32
-			Sleep(wait_time);
+
+			/*#ifdef _WIN32
+			Sleep(pollingDelay);
 			#else
-			usleep(wait_time*1000);
+			usleep(pollingDelay*1000);
 			#endif
-			
+			*/
+
 			remove(filename);
 			for(int l=0; l<=num; l++){
 				for(int n=0; n<16; n++){
@@ -429,7 +610,9 @@ int main(int argc, char** argv){
 			num = -1;
 			num_old = 0;
 		}
+	   }
+         // close the socket 
+         close(sockfd);
 	}
-
 	return 0;
 }
